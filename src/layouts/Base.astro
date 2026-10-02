@@ -1,0 +1,133 @@
+---
+// Шрифты лежат вместе с сайтом, без загрузки с Google
+import '@fontsource-variable/literata/index.css';
+import '@fontsource/caveat/500.css';
+import '@fontsource/caveat/700.css';
+import { url } from '../lib/utils';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const { title, description = 'Рецепты нашей семьи: от прабабушек до наших дней.' } = Astro.props;
+const fullTitle = title ? `${title} — Семейная кулинарная книга` : 'Семейная кулинарная книга';
+const path = Astro.url.pathname;
+const isPeople = path.includes('/people');
+---
+
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="icon" href={url('favicon.svg')} type="image/svg+xml" />
+  </head>
+  <body>
+    <a class="skip" href="#main">К содержанию</a>
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a class="brand" href={url()}>Семейная кулинарная книга</a>
+        <nav aria-label="Разделы">
+          <a href={url()} aria-current={!isPeople ? 'page' : undefined}>Рецепты</a>
+          <a href={url('people')} aria-current={isPeople ? 'page' : undefined}>Кто готовил</a>
+        </nav>
+      </div>
+    </header>
+    <main id="main" class="wrap">
+      <slot />
+    </main>
+    <footer class="wrap site-footer">
+      Записано, чтобы не забылось.
+    </footer>
+  </body>
+</html>
+
+<style is:global>
+  :root {
+    --paper: #fbfbf9;
+    --grid: #e3e9f1;
+    --ink: #1d3f7a;        /* шариковая ручка */
+    --ink-soft: #4d6aa0;
+    --text: #22262c;
+    --muted: #626b77;
+    --margin-line: #d9534c; /* красные поля тетради */
+    --chip: #edf1f7;
+    --rule: #cfd8e4;
+    --cell: 24px;
+    --serif: 'Literata Variable', Georgia, 'Times New Roman', serif;
+    --hand: 'Caveat', 'Segoe Print', cursive;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #141922;
+      --grid: #1d2430;
+      --ink: #9dbcf2;
+      --ink-soft: #7f9cd0;
+      --text: #e3e6ea;
+      --muted: #9aa3ae;
+      --margin-line: #b65650;
+      --chip: #1f2734;
+      --rule: #2c3644;
+      color-scheme: dark;
+    }
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html {
+    background-color: var(--paper);
+    /* тетрадь в клетку */
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: var(--cell) var(--cell);
+  }
+  body {
+    margin: 0;
+    font-family: var(--serif);
+    font-size: 1.0625rem;
+    line-height: 1.65;
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 68rem; margin: 0 auto; padding: 0 1rem; }
+  @media (min-width: 720px) { .wrap { padding: 0 2rem; } }
+
+  h1, h2, h3 { font-weight: 600; line-height: 1.2; margin: 0; }
+  a { color: var(--ink); text-underline-offset: 0.18em; text-decoration-thickness: 1px; }
+  a:hover { text-decoration-thickness: 2px; }
+  :focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; border-radius: 2px; }
+
+  .hand { font-family: var(--hand); color: var(--ink); font-weight: 500; }
+
+  .skip { position: absolute; left: -999px; }
+  .skip:focus { left: 1rem; top: 1rem; background: var(--paper); padding: 0.5rem 1rem; z-index: 10; }
+
+  .site-header { border-bottom: 1px solid var(--rule); background: color-mix(in srgb, var(--paper) 88%, transparent); }
+  .header-inner { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; align-items: baseline; justify-content: space-between; padding-block: 1rem; }
+  .brand { font-weight: 600; color: var(--text); text-decoration: none; }
+  nav { display: flex; gap: 1.25rem; }
+  nav a { color: var(--muted); text-decoration: none; }
+  nav a[aria-current='page'] { color: var(--ink); text-decoration: underline; }
+
+  main { padding-block: 2.5rem 4rem; }
+  .site-footer { padding-block: 2rem 3rem; color: var(--muted); font-size: 0.95rem; }
+
+  .chip {
+    display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px;
+    background: var(--chip); color: var(--muted); font-size: 0.875rem; line-height: 1.5;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+  @media print {
+    html { background: none; }
+    .site-header, .site-footer, .no-print { display: none !important; }
+    main { padding: 0; }
+  }
+</style>

@@ -1,0 +1,182 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../layouts/Base.astro';
+import { CATEGORIES } from '../lib/categories';
+import { url, plural } from '../lib/utils';
+
+const recipes = await getCollection('recipes');
+const people = await getCollection('people');
+const nameOf = new Map(people.map((p) => [p.id, p.data.name]));
+
+const groups = CATEGORIES.map((cat) => ({
+  cat,
+  items: recipes
+    .filter((r) => r.data.category === cat)
+    .sort((a, b) => a.data.title.localeCompare(b.data.title, 'ru')),
+})).filter((g) => g.items.length);
+
+const authorsWithRecipes = people
+  .filter((p) => recipes.some((r) => r.data.author.id === p.id))
+  .sort((a, b) => a.data.name.localeCompare(b.data.name, 'ru'));
+
+// Текст, по которому ищем: название, ингредиенты, теги, праздники, автор
+const searchText = (r: (typeof recipes)[number]) =>
+  [
+    r.data.title,
+    nameOf.get(r.data.author.id),
+    ...r.data.ingredients.map((i) => i.name),
+    ...r.data.tags,
+    ...r.data.occasions,
+  ]
+    .join(' ')
+    .toLowerCase()
+    .replaceAll('ё', 'е');
+
+const total = recipes.length;
+---
+
+<Base>
+  <section class="hero">
+    <h1>Семейная кулинарная книга</h1>
+    <p class="hand lead">
+      {`${total} ${plural(total, 'рецепт', 'рецепта', 'рецептов')} от ${authorsWithRecipes.length} ${plural(authorsWithRecipes.length, 'человека', 'человек', 'человек')}`}
+    </p>
+  </section>
+
+  {total === 0 ? (
+    <p class="empty">
+      Здесь пока пусто. Скопируйте <code>src/content/recipes/_шаблон.md</code>, заполните его,
+      и рецепт появится на этой странице.
+    </p>
+  ) : (
+    <>
+      <form class="filters no-print" role="search" onsubmit="return false">
+        <label class="field search">
+          <span>Найти</span>
+          <input id="q" type="search" placeholder="Название или ингредиент: капуста, творог…" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span>Раздел</span>
+          <select id="cat">
+            <option value="">Все разделы</option>
+            {groups.map((g) => <option value={g.cat}>{g.cat}</option>)}
+          </select>
+        </label>
+        <label class="field">
+          <span>Чей рецепт</span>
+          <select id="author">
+            <option value="">Все</option>
+            {authorsWithRecipes.map((p) => <option value={p.id}>{p.data.name}</option>)}
+          </select>
+        </label>
+      </form>
+
+      <div class="toc" id="toc">
+        {groups.map((g) => (
+          <section class="chapter" data-cat={g.cat}>
+            <h2>{g.cat}</h2>
+            <ul>
+              {g.items.map((r) => (
+                <li data-cat={r.data.category} data-author={r.data.author.id} data-search={searchText(r)}>
+                  <a class="row" href={url(`recipes/${r.id}`)}>
+                    <span class="title">{r.data.title}</span>
+                    <span class="leader" aria-hidden="true"></span>
+                    <span class="hand who">{nameOf.get(r.data.author.id)}</span>
+                  </a>
+                  {(r.data.time || r.data.occasions.length > 0) && (
+                    <p class="meta">
+                      {r.data.time && <span>{r.data.time}</span>}
+                      {r.data.occasions.map((o) => <span class="chip">{o}</span>)}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+      <p id="nothing" class="empty" hidden>
+        Ничего не нашлось. Попробуйте другое слово или сбросьте фильтры.
+        <button type="button" id="reset">Сбросить</button>
+      </p>
+    </>
+  )}
+</Base>
+
+<script>
+  const q = document.querySelector<HTMLInputElement>('#q');
+  const cat = document.querySelector<HTMLSelectElement>('#cat');
+  const author = document.querySelector<HTMLSelectElement>('#author');
+  const nothing = document.querySelector<HTMLElement>('#nothing');
+
+  function apply() {
+    if (!q || !cat || !author) return;
+    const words = q.value.toLowerCase().replaceAll('ё', 'е').split(/\s+/).filter(Boolean);
+    let shown = 0;
+    document.querySelectorAll<HTMLElement>('.chapter').forEach((chapter) => {
+      let inChapter = 0;
+      chapter.querySelectorAll<HTMLElement>('li').forEach((li) => {
+        const ok =
+          (!cat.value || li.dataset.cat === cat.value) &&
+          (!author.value || li.dataset.author === author.value) &&
+          words.every((w) => li.dataset.search!.includes(w));
+        li.hidden = !ok;
+        if (ok) inChapter++;
+      });
+      chapter.hidden = inChapter === 0;
+      shown += inChapter;
+    });
+    if (nothing) nothing.hidden = shown > 0;
+  }
+
+  [q, cat, author].forEach((el) => el?.addEventListener('input', apply));
+  document.querySelector('#reset')?.addEventListener('click', () => {
+    if (q) q.value = '';
+    if (cat) cat.value = '';
+    if (author) author.value = '';
+    apply();
+    q?.focus();
+  });
+</script>
+
+<style>
+  .hero { margin: 1rem 0 2.5rem; }
+  .hero h1 { font-size: clamp(2.25rem, 6vw, 3.75rem); letter-spacing: -0.01em; max-width: 18ch; }
+  .lead { font-size: 2.1rem; margin: 0.5rem 0 0; }
+
+  .filters {
+    display: grid; gap: 0.75rem 1rem; grid-template-columns: 1fr;
+    margin-bottom: 2.5rem; max-width: 52rem;
+  }
+  @media (min-width: 720px) { .filters { grid-template-columns: 2fr 1fr 1fr; } }
+  .field { display: grid; gap: 0.25rem; font-size: 0.9rem; color: var(--muted); }
+  .field input, .field select {
+    font: inherit; font-size: 1rem; color: var(--text);
+    background: var(--paper); border: 1px solid var(--rule); border-radius: 6px;
+    padding: 0.55rem 0.7rem; min-height: 2.75rem;
+  }
+  .field input:focus, .field select:focus { border-color: var(--ink); outline: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--ink) 25%, transparent); }
+
+  .toc { max-width: 52rem; }
+  .chapter + .chapter { margin-top: 2.25rem; }
+  .chapter h2 {
+    font-size: 1.05rem; font-weight: 600; color: var(--muted);
+    border-bottom: 1px solid var(--rule); padding-bottom: 0.35rem; margin-bottom: 0.25rem;
+  }
+  .chapter h2::first-letter { text-transform: uppercase; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { padding: 0.55rem 0; }
+  .row { display: flex; align-items: baseline; gap: 0.5rem; text-decoration: none; color: var(--text); }
+  .row:hover .title { color: var(--ink); text-decoration: underline; text-decoration-thickness: 1px; }
+  .title { font-size: 1.2rem; }
+  .leader { flex: 1; border-bottom: 2px dotted var(--rule); min-width: 1.5rem; transform: translateY(-0.3em); }
+  .who { font-size: 1.45rem; white-space: nowrap; line-height: 1; }
+  .meta { margin: 0.15rem 0 0; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; font-size: 0.9rem; color: var(--muted); }
+
+  .empty { color: var(--muted); max-width: 40rem; }
+  .empty button {
+    font: inherit; color: var(--ink); background: none; border: 1px solid var(--ink);
+    border-radius: 6px; padding: 0.2rem 0.7rem; margin-left: 0.5rem; cursor: pointer;
+  }
+  code { font-size: 0.9em; background: var(--chip); padding: 0.1rem 0.35rem; border-radius: 4px; }
+</style>

@@ -1,0 +1,9 @@
+---
+import Base from '../layouts/Base.astro';
+import { url } from '../lib/utils';
+---
+
+<Base title="Страница не найдена">
+  <h1>Такой страницы нет</h1>
+  <p>Возможно, рецепт переименовали. Поищите его в <a href={url()}>общем списке</a>.</p>
+</Base>

@@ -1,0 +1,57 @@
+---
+import { getCollection, render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import { url } from '../../lib/utils';
+
+export async function getStaticPaths() {
+  const people = await getCollection('people');
+  return people.map((person) => ({ params: { slug: person.id }, props: { person } }));
+}
+
+const { person } = Astro.props;
+const p = person.data;
+const { Content } = await render(person);
+const recipes = (await getCollection('recipes', (r) => r.data.author.id === person.id))
+  .sort((a, b) => a.data.title.localeCompare(b.data.title, 'ru'));
+---
+
+<Base title={p.name}>
+  <p class="crumbs"><a href={url('people')}>Кто готовил</a></p>
+  <div class="person">
+    {p.photo && <img class="photo" src={url(p.photo)} alt={p.name} />}
+    <div>
+      <h1 class="hand">{p.name}</h1>
+      {p.fullName && <p class="full">{p.fullName}</p>}
+      <p class="about">{[p.relation, p.years, p.from].filter(Boolean).join(', ')}</p>
+    </div>
+  </div>
+
+  <div class="story"><Content /></div>
+
+  <h2>Рецепты</h2>
+  {recipes.length ? (
+    <ul class="list">
+      {recipes.map((r) => (
+        <li><a href={url(`recipes/${r.id}`)}>{r.data.title}</a> <span class="cat">{r.data.category}</span></li>
+      ))}
+    </ul>
+  ) : (
+    <p class="muted">Рецептов пока нет. Укажите в рецепте <code>author: {person.id}</code>, и он появится здесь.</p>
+  )}
+</Base>
+
+<style>
+  .crumbs { margin: 0 0 1rem; color: var(--muted); font-size: 0.95rem; }
+  .person { display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  .photo { width: 8rem; height: 8rem; object-fit: cover; border-radius: 50%; }
+  h1 { font-size: clamp(2.75rem, 7vw, 4rem); font-weight: 700; line-height: 1; }
+  .full { margin: 0.4rem 0 0; }
+  .about { margin: 0.2rem 0 0; color: var(--muted); }
+  .story { max-width: 40rem; margin-bottom: 2.5rem; }
+  h2 { font-size: 1.35rem; margin-bottom: 0.5rem; }
+  .list { list-style: none; padding: 0; margin: 0; max-width: 40rem; }
+  .list li { padding: 0.5rem 0; border-bottom: 1px dashed var(--rule); font-size: 1.15rem; }
+  .cat { color: var(--muted); font-size: 0.9rem; margin-left: 0.4rem; }
+  .muted { color: var(--muted); }
+  code { font-size: 0.9em; background: var(--chip); padding: 0.1rem 0.35rem; border-radius: 4px; }
+</style>

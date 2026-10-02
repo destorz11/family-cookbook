@@ -1,0 +1,178 @@
+---
+import { getCollection, getEntry, render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import { url, formatAmount, plural } from '../../lib/utils';
+
+export async function getStaticPaths() {
+  const recipes = await getCollection('recipes');
+  return recipes.map((recipe) => ({ params: { slug: recipe.id }, props: { recipe } }));
+}
+
+const { recipe } = Astro.props;
+const d = recipe.data;
+const author = await getEntry(d.author);
+const { Content } = await render(recipe);
+
+// Ингредиенты по группам, порядок как в файле
+const groups: { name?: string; items: typeof d.ingredients }[] = [];
+for (const ing of d.ingredients) {
+  const last = groups.at(-1);
+  if (last && last.name === ing.group) last.items.push(ing);
+  else groups.push({ name: ing.group, items: [ing] });
+}
+---
+
+<Base title={d.title} description={`${d.title}: рецепт из семейной книги.`}>
+  <article class="recipe">
+    <header class="recipe-head">
+      <p class="crumbs no-print"><a href={url()}>Все рецепты</a> / {d.category}</p>
+      <h1>{d.title}</h1>
+      <p class="hand signed">
+        {author ? <a href={url(`people/${author.id}`)}>{author.data.name}</a> : d.author.id}
+        {d.origin && <span class="origin">, {d.origin}</span>}
+      </p>
+      <p class="facts">
+        {d.time && <span>{d.time}</span>}
+        {d.occasions.map((o) => <span class="chip">{o}</span>)}
+        {d.tags.map((t) => <span class="chip">{t}</span>)}
+      </p>
+    </header>
+
+    {d.photo && <img class="photo" src={url(d.photo)} alt={d.title} loading="lazy" />}
+
+    <div class="columns">
+      <aside class="ingredients" aria-labelledby="ing-title">
+        <div class="ing-head">
+          <h2 id="ing-title">Продукты</h2>
+          <div class="servings no-print" data-base={d.servings}>
+            <button type="button" data-step="-1" aria-label="Меньше порций">−</button>
+            <output aria-live="polite"><span id="srv">{d.servings}</span> <span id="srv-word">{plural(d.servings, 'порция', 'порции', 'порций')}</span></output>
+            <button type="button" data-step="1" aria-label="Больше порций">+</button>
+          </div>
+          <p class="print-only">{d.servings} {plural(d.servings, 'порция', 'порции', 'порций')}</p>
+        </div>
+        {groups.map((g) => (
+          <div class="group">
+            {g.name && <h3>{g.name}</h3>}
+            <ul>
+              {g.items.map((i) => (
+                <li>
+                  <span class="name">{i.name}</span>
+                  {i.amount != null && (
+                    <span class="amount">
+                      <span data-amount={i.amount} data-unit={i.unit ?? ''}>{formatAmount(i.amount)}</span>{i.unit && ` ${i.unit}`}
+                    </span>
+                  )}
+                  {i.amount == null && i.unit && <span class="amount">{i.unit}</span>}
+                  {i.note && <span class="note">{i.note}</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+        <button type="button" class="print no-print" onclick="window.print()">Распечатать</button>
+      </aside>
+
+      <div class="body">
+        <Content />
+      </div>
+    </div>
+  </article>
+</Base>
+
+<script>
+  import { formatAmount, plural, scaleAmount } from '../../lib/utils';
+
+  const box = document.querySelector<HTMLElement>('.servings');
+  if (box) {
+    const base = Number(box.dataset.base);
+    let current = base;
+    const srv = document.querySelector('#srv')!;
+    const word = document.querySelector('#srv-word')!;
+    const amounts = document.querySelectorAll<HTMLElement>('[data-amount]');
+
+    box.querySelectorAll<HTMLButtonElement>('button').forEach((btn) =>
+      btn.addEventListener('click', () => {
+        current = Math.min(99, Math.max(1, current + Number(btn.dataset.step)));
+        srv.textContent = String(current);
+        word.textContent = plural(current, 'порция', 'порции', 'порций');
+        amounts.forEach((el) => {
+          el.textContent = formatAmount(scaleAmount(Number(el.dataset.amount), current / base, el.dataset.unit));
+        });
+        box.classList.toggle('changed', current !== base);
+      }),
+    );
+  }
+</script>
+
+<style>
+  .recipe-head { max-width: 46rem; margin-bottom: 2rem; }
+  .crumbs { margin: 0 0 0.75rem; color: var(--muted); font-size: 0.95rem; }
+  h1 { font-size: clamp(2rem, 5vw, 3.25rem); letter-spacing: -0.01em; }
+  .signed { font-size: 1.9rem; margin: 0.4rem 0 0; line-height: 1.2; }
+  .signed a { text-decoration: none; }
+  .signed a:hover { text-decoration: underline; }
+  .origin { color: var(--ink-soft); }
+  .facts { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; margin: 0.9rem 0 0; color: var(--muted); font-size: 0.95rem; }
+
+  .photo { width: 100%; max-width: 46rem; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 4px; margin-bottom: 2rem; display: block; }
+
+  .columns { display: grid; gap: 2.5rem; }
+  @media (min-width: 860px) { .columns { grid-template-columns: 18rem minmax(0, 1fr); gap: 3.5rem; } }
+
+  .ingredients {
+    background: var(--paper); border: 1px solid var(--rule); border-radius: 6px;
+    padding: 1.25rem 1.25rem 1rem; align-self: start;
+  }
+  @media (min-width: 860px) { .ingredients { position: sticky; top: 1.5rem; } }
+  .ing-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+  .ing-head h2 { font-size: 1.2rem; }
+  .servings { display: flex; align-items: center; gap: 0.4rem; font-size: 0.95rem; }
+  .servings button {
+    width: 2.25rem; height: 2.25rem; border-radius: 50%; border: 1px solid var(--rule);
+    background: var(--paper); color: var(--ink); font: inherit; font-size: 1.15rem; cursor: pointer; line-height: 1;
+  }
+  .servings button:hover { border-color: var(--ink); }
+  .servings output { min-width: 5.5rem; text-align: center; }
+  .servings.changed output { color: var(--ink); font-weight: 600; }
+
+  .group + .group { margin-top: 1rem; }
+  .group h3 { font-size: 0.95rem; color: var(--muted); font-weight: 600; margin-bottom: 0.25rem; }
+  .ingredients ul { list-style: none; margin: 0; padding: 0; }
+  .ingredients li {
+    display: grid; grid-template-columns: 1fr auto; column-gap: 0.75rem;
+    padding: 0.4rem 0; border-bottom: 1px dashed var(--rule);
+  }
+  .ingredients li:last-child { border-bottom: 0; }
+  .amount { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .note { grid-column: 1 / -1; font-size: 0.875rem; color: var(--muted); font-style: italic; }
+  .print {
+    margin-top: 1rem; font: inherit; font-size: 0.95rem; color: var(--ink);
+    background: none; border: 1px solid var(--rule); border-radius: 6px; padding: 0.4rem 0.9rem; cursor: pointer;
+  }
+  .print:hover { border-color: var(--ink); }
+  .print-only { display: none; }
+
+  /* Красная линия полей, как в школьной тетради */
+  .body { max-width: 40rem; position: relative; }
+  @media (min-width: 860px) {
+    .body { padding-left: 2rem; border-left: 2px solid var(--margin-line); }
+  }
+  .body :global(h2) { font-size: 1.35rem; margin: 2rem 0 0.75rem; }
+  .body :global(h2:first-child) { margin-top: 0; }
+  .body :global(ol) { padding-left: 1.4rem; }
+  .body :global(ol li) { margin-bottom: 0.75rem; padding-left: 0.25rem; }
+  .body :global(ol li::marker) { color: var(--ink); font-family: var(--hand); font-size: 1.35em; }
+  .body :global(blockquote) {
+    margin: 1.25rem 0; padding: 0; border: 0;
+    font-family: var(--hand); font-size: 1.6rem; line-height: 1.3; color: var(--ink);
+  }
+  .body :global(blockquote p) { margin: 0; }
+
+  @media print {
+    .ingredients { position: static; border: 0; padding: 0; }
+    .print-only { display: block; margin: 0; color: var(--muted); }
+    .body { border: 0; padding: 0; }
+    .columns { grid-template-columns: 1fr; }
+  }
+</style>
